@@ -8,3 +8,6 @@ members = [
 
 [workspace.dependencies]
 soroban-sdk = { version = "21.6.0" }
+
+[profile.release]
+overflow-checks = true

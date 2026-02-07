@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, IntoVal, String, Symbol, Val, Vec};
 
 #[contracttype]
 #[derive(Clone)]
@@ -31,6 +31,16 @@ fn read_executor(env: &Env) -> Option<Address> {
 
 fn read_history(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::History)
+}
+
+fn history_add_record(env: &Env, history_addr: &Address, algo_id: u32, tx_hash: String, note: String) {
+    let mut args: Vec<Val> = Vec::new(env);
+    args.push_back(algo_id.into_val(env));
+    args.push_back(tx_hash.into_val(env));
+    args.push_back(note.into_val(env));
+
+    let func = Symbol::new(env, "add_record");
+    env.invoke_contract::<Val>(history_addr, &func, args);
 }
 
 #[contract]
@@ -138,8 +148,7 @@ impl Vault {
         token_client.transfer(&vault, &to, &amount);
 
         if let Some(history_addr) = read_history(&env) {
-            let history = algo_history::AlgoHistoryClient::new(&env, &history_addr);
-            history.add_record(&algo_id, &tx_hash, &note);
+            history_add_record(&env, &history_addr, algo_id, tx_hash, note);
         }
     }
 
