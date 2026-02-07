@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { z } from "zod"
 import ReactFlow, {
   addEdge,
   Background,
@@ -22,6 +23,13 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 
 export type StrategyNodeType =
@@ -34,6 +42,7 @@ export type StrategyNodeType =
 
 export type StrategyNodeData = {
   label: string
+  nodeType: StrategyNodeType
   params: Record<string, unknown>
 }
 
@@ -81,6 +90,9 @@ const PALETTE: PaletteItem[] = [
   },
 ]
 
+const NODE_TYPES = {} as const
+const EDGE_TYPES = {} as const
+
 function slug(prefix: string) {
   return `${prefix}-${Math.random().toString(16).slice(2, 8)}`
 }
@@ -90,6 +102,58 @@ function parseNumber(value: string) {
   return Number.isFinite(n) ? n : value
 }
 
+const CONDITION_OPERATOR_OPTIONS = [">", ">=", "<", "<=", "==", "!="] as const
+const CONDITION_FIELD_OPTIONS = ["price", "volume"] as const
+const TRIGGER_SOURCE_OPTIONS = ["coingecko"] as const
+
+const PARAM_SCHEMAS: Record<StrategyNodeType, z.ZodTypeAny> = {
+  trigger: z.object({
+    source: z.enum(TRIGGER_SOURCE_OPTIONS),
+    symbol: z.string().min(1),
+    intervalSec: z.coerce.number().int().positive(),
+  }),
+  condition: z.object({
+    field: z.enum(CONDITION_FIELD_OPTIONS),
+    operator: z.enum(CONDITION_OPERATOR_OPTIONS),
+    value: z.coerce.number(),
+  }),
+  buy: z.object({
+    asset: z.string().min(1),
+    amount: z.coerce.number().positive(),
+    denom: z.string().min(1),
+  }),
+  sell: z.object({
+    asset: z.string().min(1),
+    amount: z.coerce.number().positive(),
+    denom: z.string().min(1),
+  }),
+  swap: z.object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    amount: z.coerce.number().positive(),
+  }),
+  delay: z.object({
+    seconds: z.coerce.number().int().positive(),
+  }),
+}
+
+function validateParams(nodeType: StrategyNodeType, params: Record<string, unknown>) {
+  const schema = PARAM_SCHEMAS[nodeType]
+  const parsed = schema.safeParse(params)
+
+  if (parsed.success) {
+    return { ok: true as const, params: parsed.data as Record<string, unknown>, errors: {} }
+  }
+
+  const errors: Record<string, string> = {}
+  for (const issue of parsed.error.issues) {
+    const key = String(issue.path[0] ?? "")
+    if (key) errors[key] = issue.message
+  }
+
+  return { ok: false as const, params, errors }
+}
+
 function NodeInspector({
   selected,
   onChange,
@@ -97,6 +161,12 @@ function NodeInspector({
   selected: Node<StrategyNodeData> | null
   onChange: (next: Node<StrategyNodeData>) => void
 }) {
+  const [errors, setErrors] = React.useState<Record<string, string>>({})
+
+  React.useEffect(() => {
+    setErrors({})
+  }, [selected?.id])
+
   if (!selected) {
     return (
       <div className="text-muted-foreground text-sm">
@@ -107,11 +177,30 @@ function NodeInspector({
 
   const entries = Object.entries(selected.data.params ?? {})
 
+  const updateParam = (key: string, rawValue: unknown) => {
+    const nextParams = {
+      ...(selected.data.params ?? {}),
+      [key]: rawValue,
+    }
+
+    const validation = validateParams(selected.data.nodeType, nextParams)
+    setErrors(validation.errors)
+
+    const next = {
+      ...selected,
+      data: {
+        ...selected.data,
+        params: validation.params,
+      },
+    }
+    onChange(next)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <div className="text-sm font-medium">{selected.data.label}</div>
-        <div className="text-muted-foreground text-xs">{selected.type}</div>
+        <div className="text-muted-foreground text-xs">{selected.data.nodeType}</div>
       </div>
 
       <div className="grid gap-3">
@@ -123,23 +212,65 @@ function NodeInspector({
               <Label className="text-xs" htmlFor={`param-${key}`}>
                 {key}
               </Label>
-              <Input
-                id={`param-${key}`}
-                value={String(value ?? "")}
-                onChange={(e) => {
-                  const next = {
-                    ...selected,
-                    data: {
-                      ...selected.data,
-                      params: {
-                        ...selected.data.params,
-                        [key]: parseNumber(e.target.value),
-                      },
-                    },
-                  }
-                  onChange(next)
-                }}
-              />
+              {selected.data.nodeType === "condition" && key === "operator" ? (
+                <Select
+                  value={String(value ?? "")}
+                  onValueChange={(v) => updateParam(key, v)}
+                >
+                  <SelectTrigger id={`param-${key}`}>
+                    <SelectValue placeholder="Select operator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONDITION_OPERATOR_OPTIONS.map((op) => (
+                      <SelectItem key={op} value={op}>
+                        {op}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : selected.data.nodeType === "condition" && key === "field" ? (
+                <Select
+                  value={String(value ?? "")}
+                  onValueChange={(v) => updateParam(key, v)}
+                >
+                  <SelectTrigger id={`param-${key}`}>
+                    <SelectValue placeholder="Select field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONDITION_FIELD_OPTIONS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : selected.data.nodeType === "trigger" && key === "source" ? (
+                <Select
+                  value={String(value ?? "")}
+                  onValueChange={(v) => updateParam(key, v)}
+                >
+                  <SelectTrigger id={`param-${key}`}>
+                    <SelectValue placeholder="Select source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_SOURCE_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id={`param-${key}`}
+                  value={String(value ?? "")}
+                  onChange={(e) => updateParam(key, parseNumber(e.target.value))}
+                />
+              )}
+
+              {errors[key] ? (
+                <p className="text-destructive text-xs">{errors[key]}</p>
+              ) : null}
             </div>
           ))
         )}
@@ -166,6 +297,9 @@ function FlowInner({
   const wrapperRef = React.useRef<HTMLDivElement | null>(null)
   const rf = useReactFlow()
   const viewport = useViewport()
+
+  const nodeTypes = React.useMemo(() => NODE_TYPES, [])
+  const edgeTypes = React.useMemo(() => EDGE_TYPES, [])
 
   React.useEffect(() => {
     onChange({ nodes, edges })
@@ -223,6 +357,7 @@ function FlowInner({
       position,
       data: {
         label: item.label,
+        nodeType: item.type,
         params: item.defaults,
       },
     }
@@ -264,6 +399,8 @@ function FlowInner({
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}

@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { useForm } from "react-hook-form"
-import { getAddress, isConnected, signTransaction } from "@stellar/freighter-api"
+import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+import { defaultModules } from "@creit-tech/stellar-wallets-kit/modules/utils"
 import { toast } from "sonner"
 
 import "reactflow/dist/style.css"
@@ -32,10 +33,30 @@ type FormValues = {
   paramsHash: string
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | null = null
+  const timeout = new Promise<never>((_, reject) => {
+    t = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+  })
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (t) clearTimeout(t)
+  }) as Promise<T>
+}
+
 export default function BuilderPage() {
   const [pubKey, setPubKey] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [connecting, setConnecting] = React.useState(false)
   const [flow, setFlow] = React.useState<StrategyFlowState>({ nodes: [], edges: [] })
+
+  const kitReadyRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (kitReadyRef.current) return
+    StellarWalletsKit.init({ modules: defaultModules() })
+    kitReadyRef.current = true
+  }, [])
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -46,24 +67,32 @@ export default function BuilderPage() {
   })
 
   async function connect() {
+    if (connecting) return
+    setConnecting(true)
     try {
-      const connected = await isConnected()
-      if (!connected) {
-        toast.error("Freighter not connected", {
-          description: "Install/enable Freighter and connect a Testnet account.",
-        })
-        return
+      const pk = await withTimeout<string>(
+        StellarWalletsKit.getAddress()
+          .then((res: { address: string }) => res.address)
+          .catch(async () => {
+            const res = (await StellarWalletsKit.authModal()) as { address: string }
+            return res.address
+          }),
+        20_000,
+        "connectWallet"
+      )
+
+      if (!pk) {
+        throw new Error("Wallet did not return an address")
       }
 
-      const res = await getAddress()
-      const pk = (res as any)?.address as string | undefined
-      if (!pk) {
-        throw new Error("No address returned")
-      }
       setPubKey(pk)
       toast.success("Wallet connected", { description: pk })
     } catch (e) {
-      toast.error("Failed to connect wallet")
+      toast.error("Failed to connect wallet", {
+        description: e instanceof Error ? e.message : "Unknown error",
+      })
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -109,23 +138,19 @@ export default function BuilderPage() {
 
       const { xdr } = (await prepareRes.json()) as { xdr: string }
 
-      const signedRes = await signTransaction(xdr, {
+      const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
         networkPassphrase: "Test SDF Network ; September 2015",
+        address: pubKey,
       })
 
-      const signed =
-        typeof signedRes === "string"
-          ? signedRes
-          : ((signedRes as any)?.signedTxXdr as string | undefined)
-
-      if (!signed) {
-        throw new Error("Freighter did not return a signed transaction")
+      if (!signedTxXdr) {
+        throw new Error("Wallet did not return a signed transaction")
       }
 
       const submitRes = await fetch("/api/soroban/submit", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ xdr: signed }),
+        body: JSON.stringify({ xdr: signedTxXdr }),
       })
 
       const submitJson = await submitRes.json()
@@ -162,7 +187,11 @@ export default function BuilderPage() {
             </p>
           </div>
           <Button variant="secondary" onClick={connect}>
-            {pubKey ? "Connected" : "Connect Freighter"}
+            {connecting
+              ? "Connecting..."
+              : pubKey
+                ? `${pubKey.slice(0, 4)}...${pubKey.slice(-4)}`
+                : "Connect Wallet"}
           </Button>
         </div>
 

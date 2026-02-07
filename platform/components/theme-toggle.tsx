@@ -9,7 +9,26 @@ import { Button } from "@/components/ui/button"
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
 
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const isDark = resolvedTheme === "dark"
+
+  if (!mounted) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8"
+        aria-label="Toggle theme"
+        disabled
+      />
+    )
+  }
 
   return (
     <Button
