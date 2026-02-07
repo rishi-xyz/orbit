@@ -71,12 +71,10 @@ export default function BuilderPage() {
     setConnecting(true)
     try {
       const pk = await withTimeout<string>(
-        StellarWalletsKit.getAddress()
-          .then((res: { address: string }) => res.address)
-          .catch(async () => {
-            const res = (await StellarWalletsKit.authModal()) as { address: string }
-            return res.address
-          }),
+        (async () => {
+          const res = (await StellarWalletsKit.authModal()) as { address: string }
+          return res.address
+        })(),
         20_000,
         "connectWallet"
       )
@@ -138,10 +136,52 @@ export default function BuilderPage() {
 
       const { xdr } = (await prepareRes.json()) as { xdr: string }
 
-      const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
-        networkPassphrase: "Test SDF Network ; September 2015",
-        address: pubKey,
-      })
+      const activeAddress = await withTimeout<string>(
+        (async () => {
+          try {
+            const res = (await StellarWalletsKit.getAddress()) as { address: string }
+            if (res?.address) return res.address
+          } catch {
+            // ignore, we'll fall back to auth modal
+          }
+
+          const res = (await StellarWalletsKit.authModal()) as { address: string }
+          return res.address
+        })(),
+        20_000,
+        "ensureWalletConnected"
+      )
+
+      if (!activeAddress) {
+        throw new Error("Wallet is not connected")
+      }
+
+      if (activeAddress !== pubKey) {
+        setPubKey(activeAddress)
+      }
+
+      let signedTxXdr: string | undefined
+      try {
+        const res = await StellarWalletsKit.signTransaction(xdr, {
+          networkPassphrase: "Test SDF Network ; September 2015",
+          address: activeAddress,
+        })
+        signedTxXdr = res?.signedTxXdr
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (msg.toLowerCase().includes("not currently connected")) {
+          const res = (await StellarWalletsKit.authModal()) as { address: string }
+          const retryAddr = res?.address || activeAddress
+          const retry = await StellarWalletsKit.signTransaction(xdr, {
+            networkPassphrase: "Test SDF Network ; September 2015",
+            address: retryAddr,
+          })
+          signedTxXdr = retry?.signedTxXdr
+          if (retryAddr !== pubKey) setPubKey(retryAddr)
+        } else {
+          throw e
+        }
+      }
 
       if (!signedTxXdr) {
         throw new Error("Wallet did not return a signed transaction")
