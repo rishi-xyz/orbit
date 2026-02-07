@@ -95,7 +95,7 @@ export const Navbar = () => {
                         className="navbar-brand-text text-base sm:text-lg font-bold tracking-tight bg-linear-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent"
                         style={{ backgroundSize: "200% 100%" }}
                     >
-                        AutoTrade
+                        Orbit
                     </span>
                 </div>
                 

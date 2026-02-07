@@ -10,13 +10,15 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 gsap.registerPlugin(ScrollTrigger);
 
 export const FeatureSection = () => {
-  const [activeFeature, setActiveFeature] = useState(0);
+  // const [activeFeature, setActiveFeature] = useState(0); // Removed activeFeature state
+
   const [isDesktopActive, setIsDesktopActive] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [fixedStyle, setFixedStyle] = useState<CSSProperties>({});
   const sectionRef = useRef<HTMLElement | null>(null);
   const rightColRef = useRef<HTMLDivElement | null>(null);
-  const featureRefs = useRef<(HTMLDivElement | null)[]>(([]));
+
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -28,20 +30,8 @@ export const FeatureSection = () => {
     const triggers: ScrollTrigger[] = [];
 
     // Create scroll triggers for feature detection
-    featureRefs.current.forEach((ref, index) => {
-      if (!ref) return;
+    // Removed per-feature scroll triggers as we now use a single static image for all features
 
-      const trigger = ScrollTrigger.create({
-        trigger: ref,
-        scroller,
-        start: "top center",
-        end: "bottom center",
-        onEnter: () => setActiveFeature(index),
-        onEnterBack: () => setActiveFeature(index),
-      });
-
-      triggers.push(trigger);
-    });
 
     if (sectionRef.current) {
       const sectionTrigger = ScrollTrigger.create({
@@ -126,9 +116,6 @@ export const FeatureSection = () => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                ref={(el) => {
-                  featureRefs.current[index] = el;
-                }}
                 className="min-h-[70vh] flex flex-col justify-center space-y-6"
               >
                 <div className="flex items-center gap-4">
@@ -166,9 +153,8 @@ export const FeatureSection = () => {
               <div className="absolute inset-0 bg-[radial-gradient(40%_35%_at_65%_35%,oklch(0.65_0.15_210/0.18)_0%,transparent_55%)]" />
               <div className="absolute inset-0 opacity-[0.35] [mask-image:radial-gradient(ellipse_at_center,black_45%,transparent_85%)] bg-[linear-gradient(to_right,oklch(0.75_0_0/0.10)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.75_0_0/0.10)_1px,transparent_1px)] bg-[size:48px_48px]" />
               <Image
-                key={activeFeature}
-                src={features[activeFeature].image}
-                alt={features[activeFeature].title}
+                src="/features.png"
+                alt="Feature"
                 width={900}
                 height={700}
                 className="relative w-full h-full object-contain p-12"
@@ -182,9 +168,24 @@ export const FeatureSection = () => {
 
       {/* Mobile Layout (unchanged) */}
       <div className="md:hidden">
+        <div className="px-6 mb-12">
+          <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-linear-to-br from-primary/10 via-background/20 to-background/0 border border-primary/10">
+            <div className="absolute inset-0 bg-[radial-gradient(40%_35%_at_65%_35%,oklch(0.65_0.15_210/0.18)_0%,transparent_55%)]" />
+            <Image
+              src="/dashboard.png"
+              alt="Platform Dashboard"
+              width={900}
+              height={700}
+              className="w-full h-full object-contain p-8"
+              loading="lazy"
+              sizes="100vw"
+            />
+          </div>
+        </div>
+
         {features.map((feature, index) => (
-          <div key={index} className="py-16 px-6">
-            <div className="space-y-6">
+          <div key={index} className="py-8 px-6 border-b border-border/5 last:border-0">
+            <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-xl bg-linear-to-br from-primary/10 to-primary/5 flex items-center justify-center border border-primary/10">
                   <feature.icon className="h-6 w-6 text-primary" />
@@ -201,18 +202,6 @@ export const FeatureSection = () => {
               <p className="text-muted-foreground/80">
                 {feature.desc}
               </p>
-
-              <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-linear-to-br from-background/50 to-background/30 border border-border/10">
-                <Image
-                  src={feature.image}
-                  alt={feature.title}
-                  width={500}
-                  height={300}
-                  className="w-full h-full object-contain p-6"
-                  loading="lazy"
-                  sizes="100vw"
-                />
-              </div>
             </div>
           </div>
         ))}

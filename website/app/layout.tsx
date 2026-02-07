@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HyperTrade",
+  title: "Orbit",
   description: "Where crypto strategies meet capital.",
   icons: {
     icon: "/logo.png"
