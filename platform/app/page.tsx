@@ -1,4 +1,3 @@
-import CoinOverview from '@/components/home/CoinOverview';
 import { Suspense } from 'react'
 
 const Page = async () => {
@@ -6,7 +5,7 @@ const Page = async () => {
         <main className="main-container">
             <section className="home-grid">
                 <Suspense fallback={<div>Loading...</div>}>
-                    <CoinOverview />
+                    {/* <CoinOverview /> */}
                 </Suspense>
             </section>
 
