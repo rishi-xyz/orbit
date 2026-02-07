@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+  "algo_registry",
+  "vault",
+  "algo_history",
+]
+
+[workspace.dependencies]
+soroban-sdk = { version = "21.6.0" }
