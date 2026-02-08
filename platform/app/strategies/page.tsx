@@ -12,6 +12,7 @@ import {
 import Link from "next/link"
 
 import { StrategyInvestButton } from "@/components/strategy-invest-button"
+import { VaultStatusCard } from "@/components/vault-status-card"
 import { fetchRegistryAlgos } from "@/lib/soroban"
 
 export default async function StrategiesPage() {
@@ -38,46 +39,54 @@ export default async function StrategiesPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {algos.length === 0 ? (
-            <Card className="md:col-span-2 xl:col-span-3">
-              <CardHeader>
-                <CardTitle>No strategies found</CardTitle>
-                <CardDescription>
-                  Either the registry is empty or the RPC is unreachable.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button asChild>
-                  <Link href="/builder">Publish the first strategy</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            algos.map((s) => (
-              <Card key={s.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate">{s.name}</CardTitle>
-                    <CardDescription className="mt-1 break-all">
-                      {s.metadataUri ? s.metadataUri : "No metadata URI"}
+        <div className="grid gap-6 md:grid-cols-4">
+          <div className="md:col-span-1">
+            <VaultStatusCard />
+          </div>
+
+          <div className="md:col-span-3">
+            <div className="grid gap-4 md:grid-cols-1 xl:grid-cols-2">
+              {algos.length === 0 ? (
+                <Card className="md:col-span-2 xl:col-span-3">
+                  <CardHeader>
+                    <CardTitle>No strategies found</CardTitle>
+                    <CardDescription>
+                      Either the registry is empty or the RPC is unreachable.
                     </CardDescription>
-                  </div>
-                  <Badge variant={s.active ? "outline" : "secondary"} className="shrink-0">
-                    {s.active ? "Active" : "Paused"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between gap-3">
-                <div className="text-muted-foreground text-xs">
-                  Owner: <span className="text-foreground break-all">{s.owner}</span>
-                </div>
-                <StrategyInvestButton algoId={s.id} />
-              </CardContent>
-              </Card>
-            ))
-          )}
+                  </CardHeader>
+                  <CardContent>
+                    <Button asChild>
+                      <Link href="/builder">Publish the first strategy</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                algos.map((s) => (
+                  <Card key={s.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <CardTitle className="truncate">{s.name}</CardTitle>
+                          <CardDescription className="mt-1 break-all">
+                            {s.metadataUri ? s.metadataUri : "No description"}
+                          </CardDescription>
+                        </div>
+                        <Badge variant={s.active ? "outline" : "secondary"} className="shrink-0">
+                          {s.active ? "Active" : "Paused"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-between gap-3">
+                      <div className="text-muted-foreground text-xs">
+                        Owner: <span className="text-foreground break-all">{s.owner}</span>
+                      </div>
+                      <StrategyInvestButton algoId={s.id} />
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </AppShell>

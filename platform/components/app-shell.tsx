@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { CoinsIcon, HammerIcon, LayoutDashboardIcon, LayersIcon, TrendingUpIcon } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
+import { WalletConnect } from "@/components/wallet-connect"
 import { Separator } from "@/components/ui/separator"
 import {
   Sidebar,
@@ -126,7 +127,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {title}
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <WalletConnect />
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="flex-1 p-4 md:p-6">{children}</div>

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useForm } from "react-hook-form"
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
-import { defaultModules } from "@creit-tech/stellar-wallets-kit/modules/utils"
+import { useWallet } from "@/providers/wallet-provider"
 import { toast } from "sonner"
 
 import "reactflow/dist/style.css"
@@ -29,7 +29,7 @@ import { sha256Hex } from "@/lib/hash"
 
 type FormValues = {
   name: string
-  metadataUri: string
+  description: string
   paramsHash: string
 }
 
@@ -45,53 +45,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 export default function BuilderPage() {
-  const [pubKey, setPubKey] = React.useState<string | null>(null)
+  const { address: pubKey, connect, connecting } = useWallet()
   const [loading, setLoading] = React.useState(false)
-  const [connecting, setConnecting] = React.useState(false)
   const [flow, setFlow] = React.useState<StrategyFlowState>({ nodes: [], edges: [] })
-
-  const kitReadyRef = React.useRef(false)
-
-  React.useEffect(() => {
-    if (kitReadyRef.current) return
-    StellarWalletsKit.init({ modules: defaultModules() })
-    kitReadyRef.current = true
-  }, [])
 
   const form = useForm<FormValues>({
     defaultValues: {
       name: "",
-      metadataUri: "",
+      description: "",
       paramsHash: "",
     },
   })
 
-  async function connect() {
-    if (connecting) return
-    setConnecting(true)
-    try {
-      const pk = await withTimeout<string>(
-        (async () => {
-          const res = (await StellarWalletsKit.authModal()) as { address: string }
-          return res.address
-        })(),
-        20_000,
-        "connectWallet"
-      )
-
-      if (!pk) {
-        throw new Error("Wallet did not return an address")
-      }
-
-      setPubKey(pk)
-      toast.success("Wallet connected", { description: pk })
-    } catch (e) {
-      toast.error("Failed to connect wallet", {
-        description: e instanceof Error ? e.message : "Unknown error",
-      })
-    } finally {
-      setConnecting(false)
-    }
+  async function handleConnect() {
+    await connect()
   }
 
   async function onSubmit(values: FormValues) {
@@ -124,7 +91,7 @@ export default function BuilderPage() {
         body: JSON.stringify({
           owner: pubKey,
           name: values.name,
-          metadataUri: values.metadataUri ?? "",
+          metadataUri: values.description ?? "",
           paramsHash,
         }),
       })
@@ -136,29 +103,7 @@ export default function BuilderPage() {
 
       const { xdr } = (await prepareRes.json()) as { xdr: string }
 
-      const activeAddress = await withTimeout<string>(
-        (async () => {
-          try {
-            const res = (await StellarWalletsKit.getAddress()) as { address: string }
-            if (res?.address) return res.address
-          } catch {
-            // ignore, we'll fall back to auth modal
-          }
-
-          const res = (await StellarWalletsKit.authModal()) as { address: string }
-          return res.address
-        })(),
-        20_000,
-        "ensureWalletConnected"
-      )
-
-      if (!activeAddress) {
-        throw new Error("Wallet is not connected")
-      }
-
-      if (activeAddress !== pubKey) {
-        setPubKey(activeAddress)
-      }
+      const activeAddress = pubKey
 
       let signedTxXdr: string | undefined
       try {
@@ -170,14 +115,13 @@ export default function BuilderPage() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         if (msg.toLowerCase().includes("not currently connected")) {
-          const res = (await StellarWalletsKit.authModal()) as { address: string }
-          const retryAddr = res?.address || activeAddress
+          const retryAddr = await connect()
+          if (!retryAddr) throw new Error("Wallet connection required")
           const retry = await StellarWalletsKit.signTransaction(xdr, {
             networkPassphrase: "Test SDF Network ; September 2015",
             address: retryAddr,
           })
           signedTxXdr = retry?.signedTxXdr
-          if (retryAddr !== pubKey) setPubKey(retryAddr)
         } else {
           throw e
         }
@@ -226,7 +170,7 @@ export default function BuilderPage() {
               Algo Registry.
             </p>
           </div>
-          <Button variant="secondary" onClick={connect}>
+          <Button variant="secondary" onClick={handleConnect}>
             {connecting
               ? "Connecting..."
               : pubKey
@@ -262,11 +206,11 @@ export default function BuilderPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="metadataUri">Metadata URI</Label>
+                <Label htmlFor="description">Description</Label>
                 <Input
-                  id="metadataUri"
-                  placeholder="ipfs://... or https://..."
-                  {...form.register("metadataUri")}
+                  id="description"
+                  placeholder="Short description"
+                  {...form.register("description")}
                 />
               </div>
 
