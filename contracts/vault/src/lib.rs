@@ -48,7 +48,7 @@ pub struct Vault;
 
 #[contractimpl]
 impl Vault {
-    pub fn init(env: Env, owner: Address, token_contract: Address) {
+    pub fn initialize(env: Env, owner: Address, token_contract: Address) {
         if env.storage().instance().has(&DataKey::Owner) {
             panic!("already initialized");
         }
@@ -175,7 +175,7 @@ mod test {
 
         let owner = Address::generate(&env);
         let token = Address::generate(&env);
-        client.init(&owner, &token);
+        client.initialize(&owner, &token);
 
         let exec = Address::generate(&env);
         client.set_executor(&exec);

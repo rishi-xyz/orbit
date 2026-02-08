@@ -1,0 +1,6 @@
+﻿18031 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\algo_history.wasm
+11394 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\algo_registry.wasm
+27421 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\vault.wasm
+18031 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\deps\algo_history.wasm
+11394 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\deps\algo_registry.wasm
+27421 C:\Users\Tharun\OneDrive\Documents\hackathon\orbit\contracts\target\wasm32-unknown-unknown\release\deps\vault.wasm

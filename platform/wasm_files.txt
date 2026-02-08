@@ -1,0 +1,14 @@
+﻿
+Name               Length La
+                          st
+                          Wr
+                          it
+                          eT
+                          im
+                          e 
+----               ------ --
+algo_history.wasm   18031 08
+algo_registry.wasm  11394 08
+vault.wasm          27421 08
+
+
