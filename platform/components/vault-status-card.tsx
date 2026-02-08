@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { AlertCircle, CheckCircle2, Loader2, Rocket, ExternalLink } from "lucide-react"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -68,7 +68,12 @@ export function VaultStatusCard() {
 
             const { xdr } = data
 
-            const signed = await StellarWalletsKit.signTransaction(xdr, {
+            const kit = new StellarWalletsKit({
+                network: WalletNetwork.TESTNET,
+                modules: allowAllModules()
+            })
+
+            const signed = await kit.signTransaction(xdr, {
                 networkPassphrase: "Test SDF Network ; September 2015",
                 address: address!,
             })

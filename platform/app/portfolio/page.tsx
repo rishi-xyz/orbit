@@ -13,8 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
-import { fetchRegistryAlgos } from "@/lib/soroban"
+import {StellarWalletsKit, WalletNetwork, allowAllModules} from "@creit.tech/stellar-wallets-kit"
 
 type Investment = {
   id: string
@@ -55,7 +54,11 @@ export default function Portfolio() {
     // Load wallet address
     async function loadWallet() {
       try {
-        const res = (await StellarWalletsKit.getAddress()) as { address: string }
+        const kit = new StellarWalletsKit({
+          network: WalletNetwork.PUBLIC,
+          modules: allowAllModules()
+        })
+        const res = await kit.getAddress()
         if (res?.address) {
           setWalletAddress(res.address)
         }
@@ -95,7 +98,11 @@ export default function Portfolio() {
 
   const handleRefresh = async () => {
     try {
-      const res = (await StellarWalletsKit.getAddress()) as { address: string }
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.PUBLIC,
+        modules: allowAllModules()
+      })
+      const res = await kit.getAddress()
       if (res?.address) {
         // Reload investments from localStorage
         const storedInvestments = localStorage.getItem('investments')

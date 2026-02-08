@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
-import { defaultModules } from "@creit-tech/stellar-wallets-kit/modules/utils"
+// import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+// import { defaultModules } from "@creit-tech/stellar-wallets-kit/modules/utils"
 import { toast } from "sonner"
 
 interface WalletContextType {
@@ -22,7 +22,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     React.useEffect(() => {
         if (kitReadyRef.current) return
-        StellarWalletsKit.init({ modules: defaultModules() })
+        // StellarWalletsKit.init({ modules: defaultModules() })
         kitReadyRef.current = true
 
         // Check if already connected
@@ -31,10 +31,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     async function checkConnection() {
         try {
-            const res = (await StellarWalletsKit.getAddress()) as { address: string }
-            if (res?.address) {
-                setAddress(res.address)
-            }
+            // const res = (await StellarWalletsKit.getAddress()) as { address: string }
+            // if (res?.address) {
+            //     setAddress(res.address)
+            // }
         } catch {
             // Not connected
         }
@@ -44,12 +44,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (connecting) return null
         setConnecting(true)
         try {
-            const res = (await StellarWalletsKit.authModal()) as { address: string }
-            if (res?.address) {
-                setAddress(res.address)
-                toast.success("Wallet connected", { description: res.address })
-                return res.address
-            }
+            // const res = (await StellarWalletsKit.authModal()) as { address: string }
+            // if (res?.address) {
+            //     setAddress(res.address)
+            //     toast.success("Wallet connected", { description: res.address })
+            //     return res.address
+            // }
             return null
         } catch (e) {
             toast.error("Failed to connect wallet", {

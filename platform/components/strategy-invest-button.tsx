@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -20,14 +20,22 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
 
   async function ensureWalletConnected() {
     try {
-      const res = (await StellarWalletsKit.getAddress()) as { address: string }
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.PUBLIC,
+        modules: allowAllModules()
+      })
+      const res = await kit.getAddress()
       if (res?.address) return res.address
     } catch {
       // fallthrough
     }
 
-    const res = (await StellarWalletsKit.authModal()) as { address: string }
-    return res.address
+    const kit = new StellarWalletsKit({
+      network: WalletNetwork.PUBLIC,
+      modules: allowAllModules()
+    })
+    const res = await kit.getAddress()
+    return res?.address
   }
 
   async function checkTokenAccess(userAddress: string) {
@@ -103,9 +111,15 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
 
       // Sign and submit the approval transaction
       console.log("🔧 [Trustline Setup] Requesting wallet signature...")
+      
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.TESTNET,
+        modules: allowAllModules()
+      })
+      
       let signedTxXdr: string | undefined
       try {
-        const res = await StellarWalletsKit.signTransaction(approvalData.xdr, {
+        const res = await kit.signTransaction(approvalData.xdr, {
           networkPassphrase: "Test SDF Network ; September 2015",
           address: userAddress,
         })
@@ -116,9 +130,9 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         const msg = e instanceof Error ? e.message : String(e)
         if (msg.toLowerCase().includes("not currently connected")) {
           console.log("🔧 [Trustline Setup] Wallet not connected, showing auth modal...")
-          const res = (await StellarWalletsKit.authModal()) as { address: string }
+          const res = await kit.getAddress()
           const retryAddr = res?.address || userAddress
-          const retry = await StellarWalletsKit.signTransaction(approvalData.xdr, {
+          const retry = await kit.signTransaction(approvalData.xdr, {
             networkPassphrase: "Test SDF Network ; September 2015",
             address: retryAddr,
           })
@@ -227,9 +241,14 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       const { xdr } = (await prepareRes.json()) as { xdr: string }
       console.log("💰 [Invest] Got transaction XDR, requesting signature...")
 
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.TESTNET,
+        modules: allowAllModules()
+      })
+
       let signedTxXdr: string | undefined
       try {
-        const res = await StellarWalletsKit.signTransaction(xdr, {
+        const res = await kit.signTransaction(xdr, {
           networkPassphrase: "Test SDF Network ; September 2015",
           address: from,
         })
@@ -240,9 +259,9 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         const msg = e instanceof Error ? e.message : String(e)
         if (msg.toLowerCase().includes("not currently connected")) {
           console.log("💰 [Invest] Wallet not connected, showing auth modal...")
-          const res = (await StellarWalletsKit.authModal()) as { address: string }
+          const res = await kit.getAddress()
           const retryAddr = res?.address || from
-          const retry = await StellarWalletsKit.signTransaction(xdr, {
+          const retry = await kit.signTransaction(xdr, {
             networkPassphrase: "Test SDF Network ; September 2015",
             address: retryAddr,
           })

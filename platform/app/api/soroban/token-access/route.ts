@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 import {
   Address,
-  Asset,
   Contract,
-  Operation,
   TransactionBuilder,
   nativeToScVal,
   scValToNative,
   xdr,
+  Horizon,
 } from "@stellar/stellar-sdk"
 
 import {
@@ -128,9 +127,13 @@ export async function POST(req: Request) {
     console.log("🔍 [API:TokenAccess] Checking token balance...")
     
     if (isNativeToken) {
-      // For native XLM, get balance directly from account
+      // For native XLM, get balance from Horizon server
       try {
-        balance = BigInt(source.balances[0]?.balance || "0") // First balance is usually XLM
+        const horizonServer = new Horizon.Server(
+          process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org"
+        )
+        const horizonAccount = await horizonServer.loadAccount(body.userAddress)
+        balance = BigInt(horizonAccount.balances[0]?.balance || "0") // First balance is usually XLM
         console.log("🔍 [API:TokenAccess] Native XLM balance:", balance.toString())
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error"

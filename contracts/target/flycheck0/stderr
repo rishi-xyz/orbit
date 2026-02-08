@@ -4,4 +4,4 @@ workspace: /home/rishi/rishi/hacks/orbit/contracts/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /home/rishi/rishi/hacks/orbit/contracts/creator_vault/Cargo.toml
 workspace: /home/rishi/rishi/hacks/orbit/contracts/Cargo.toml
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -26,14 +26,22 @@ export function CreatorVaultManager({ creatorAddress }: { creatorAddress: string
 
   async function ensureWalletConnected() {
     try {
-      const res = (await StellarWalletsKit.getAddress()) as { address: string }
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.PUBLIC,
+        modules: allowAllModules()
+      })
+      const res = await kit.getAddress()
       if (res?.address) return res.address
     } catch {
       // fallthrough
     }
 
-    const res = (await StellarWalletsKit.authModal()) as { address: string }
-    return res.address
+    const kit = new StellarWalletsKit({
+      network: WalletNetwork.PUBLIC,
+      modules: allowAllModules()
+    })
+    const res = await kit.getAddress()
+    return res?.address
   }
 
   async function fetchVaultInfo() {

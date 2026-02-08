@@ -6,6 +6,7 @@ import {
   nativeToScVal,
   scValToNative,
   xdr,
+  Horizon,
 } from "@stellar/stellar-sdk"
 
 import {
@@ -186,8 +187,12 @@ export async function POST(req: Request) {
       // Fallback to direct balance check if token access API fails
       try {
         if (isNativeToken) {
-          // For native XLM, get balance directly from account
-          const balance = BigInt(source.balances[0]?.balance || "0")
+          // For native XLM, get balance from Horizon server
+          const horizonServer = new Horizon.Server(
+            process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org"
+          )
+          const horizonAccount = await horizonServer.loadAccount(body.from)
+          const balance = BigInt((horizonAccount as any).balances?.[0]?.balance || "0")
           
           if (balance < amount) {
             return NextResponse.json(

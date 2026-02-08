@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useForm } from "react-hook-form"
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk"
+import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit"
 import { useWallet } from "@/providers/wallet-provider"
 import { toast } from "sonner"
 
@@ -107,9 +107,14 @@ export default function BuilderPage() {
 
       const activeAddress = pubKey
 
+      const kit = new StellarWalletsKit({
+        network: WalletNetwork.TESTNET,
+        modules: allowAllModules()
+      })
+
       let signedTxXdr: string | undefined
       try {
-        const res = await StellarWalletsKit.signTransaction(xdr, {
+        const res = await kit.signTransaction(xdr, {
           networkPassphrase: "Test SDF Network ; September 2015",
           address: activeAddress,
         })
@@ -119,7 +124,7 @@ export default function BuilderPage() {
         if (msg.toLowerCase().includes("not currently connected")) {
           const retryAddr = await connect()
           if (!retryAddr) throw new Error("Wallet connection required")
-          const retry = await StellarWalletsKit.signTransaction(xdr, {
+          const retry = await kit.signTransaction(xdr, {
             networkPassphrase: "Test SDF Network ; September 2015",
             address: retryAddr,
           })
