@@ -3,6 +3,7 @@
 import * as React from "react"
 import { StellarWalletsKit, WalletNetwork, allowAllModules } from "@creit.tech/stellar-wallets-kit"
 import { toast } from "sonner"
+import { useWallet } from "@/providers/wallet-provider"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,28 +21,17 @@ interface CreatorVaultInfo {
 }
 
 export function CreatorVaultManager({ creatorAddress }: { creatorAddress: string }) {
+  const { address, isConnected, connect } = useWallet()
   const [loading, setLoading] = React.useState(false)
   const [creatingVault, setCreatingVault] = React.useState(false)
   const [vaultInfo, setVaultInfo] = React.useState<CreatorVaultInfo | null>(null)
 
   async function ensureWalletConnected() {
-    try {
-      const kit = new StellarWalletsKit({
-        network: WalletNetwork.PUBLIC,
-        modules: allowAllModules()
-      })
-      const res = await kit.getAddress()
-      if (res?.address) return res.address
-    } catch {
-      // fallthrough
+    if (isConnected && address) {
+      return address
     }
-
-    const kit = new StellarWalletsKit({
-      network: WalletNetwork.PUBLIC,
-      modules: allowAllModules()
-    })
-    const res = await kit.getAddress()
-    return res?.address
+    const connectedAddress = await connect()
+    return connectedAddress
   }
 
   async function fetchVaultInfo() {

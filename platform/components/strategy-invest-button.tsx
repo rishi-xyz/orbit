@@ -6,9 +6,15 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { VaultInitializer } from "./vault-initializer"
 
 export function StrategyInvestButton({ algoId }: { algoId: number }) {
   const [loading, setLoading] = React.useState(false)
+  const [vaultStatus, setVaultStatus] = React.useState<{
+    initialized: boolean
+    owner?: string
+    token?: string
+  } | null>(null)
   const [tokenAccessStatus, setTokenAccessStatus] = React.useState<{
     hasTrustline: boolean
     needsTrustlineSetup: boolean
@@ -18,12 +24,32 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
     message?: string
   } | null>(null)
 
+  React.useEffect(() => {
+    checkVaultStatus()
+  }, [])
+
+  async function checkVaultStatus() {
+    try {
+      const response = await fetch("/api/soroban/vault-status")
+      const data = await response.json()
+      
+      setVaultStatus({
+        initialized: !!(data.owner && data.token),
+        owner: data.owner,
+        token: data.token
+      })
+    } catch (e) {
+      console.error("Failed to check vault status:", e)
+    }
+  }
+
   async function ensureWalletConnected() {
     try {
       const kit = new StellarWalletsKit({
-        network: WalletNetwork.PUBLIC,
+        network: WalletNetwork.TESTNET,
         modules: allowAllModules()
       })
+      kit.setWallet("freighter")
       const res = await kit.getAddress()
       if (res?.address) return res.address
     } catch {
@@ -31,9 +57,10 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
     }
 
     const kit = new StellarWalletsKit({
-      network: WalletNetwork.PUBLIC,
+      network: WalletNetwork.TESTNET,
       modules: allowAllModules()
     })
+    kit.setWallet("freighter")
     const res = await kit.getAddress()
     return res?.address
   }
