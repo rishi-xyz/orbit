@@ -18,6 +18,7 @@ import ReactFlow, {
   useReactFlow,
   useViewport,
 } from "reactflow"
+import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -90,66 +91,7 @@ const PALETTE: PaletteItem[] = [
   },
 ]
 
-const DEMO_TEMPLATES = [
-  {
-    name: "DCA Strategy",
-    label: "💎 DCA Strategy",
-    description: "Dollar Cost Averaging - safest for beginners",
-    nodes: [
-      {
-        id: "dca-timer",
-        type: "trigger",
-        position: { x: 100, y: 100 },
-        data: { source: "timer", intervalSec: 86400 } // Daily
-      },
-      {
-        id: "dca-condition",
-        type: "condition", 
-        position: { x: 300, y: 100 },
-        data: { field: "price", operator: "<", value: 0.15 }
-      },
-      {
-        id: "dca-buy",
-        type: "buy",
-        position: { x: 500, y: 100 },
-        data: { asset: "XLM", amount: 50, denom: "USDC" }
-      }
-    ],
-    edges: [
-      { id: "dca-e1", source: "dca-timer", target: "dca-condition" },
-      { id: "dca-e2", source: "dca-condition", target: "dca-buy" }
-    ]
-  },
-  {
-    name: "Moving Average",
-    label: "📊 Moving Average",
-    description: "Technical analysis with moving averages",
-    nodes: [
-      {
-        id: "ma-trigger",
-        type: "trigger",
-        position: { x: 100, y: 100 },
-        data: { source: "coingecko", symbol: "XLM", intervalSec: 300 } // 5 min
-      },
-      {
-        id: "ma-condition",
-        type: "condition",
-        position: { x: 300, y: 100 },
-        data: { field: "ma_cross", operator: ">", value: 1.0 }
-      },
-      {
-        id: "ma-buy",
-        type: "buy",
-        position: { x: 500, y: 100 },
-        data: { asset: "XLM", amount: 100, denom: "USDC" }
-      }
-    ],
-    edges: [
-      { id: "ma-e1", source: "ma-trigger", target: "ma-condition" },
-      { id: "ma-e2", source: "ma-condition", target: "ma-buy" }
-    ]
-  }
-]
+
 
 const NODE_TYPES = {} as const
 const EDGE_TYPES = {} as const
@@ -354,6 +296,7 @@ function FlowInner({
   )
   const [edges, setEdges] = React.useState<Array<Edge>>(value.edges)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const [isDeploying, setIsDeploying] = React.useState(false)
 
   const wrapperRef = React.useRef<HTMLDivElement | null>(null)
   const rf = useReactFlow()
@@ -384,25 +327,85 @@ function FlowInner({
     []
   )
 
+  const deployStrategy = async () => {
+    if (nodes.length === 0) {
+      toast.error("Cannot deploy empty strategy", {
+        description: "Add at least a trigger and an action node."
+      })
+      return
+    }
+
+    const hasTrigger = nodes.some(node => node.data.nodeType === "trigger")
+    const hasAction = nodes.some(node => 
+      node.data.nodeType === "buy" || node.data.nodeType === "sell"
+    )
+
+    if (!hasTrigger) {
+      toast.error("Missing trigger", {
+        description: "Add a trigger node to define when the strategy should execute."
+      })
+      return
+    }
+
+    if (!hasAction) {
+      toast.error("Missing action", {
+        description: "Add at least one buy or sell action node."
+      })
+      return
+    }
+
+    setIsDeploying(true)
+    
+    try {
+      const response = await fetch("/api/strategies/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: `Strategy_${Date.now()}`,
+          description: "Auto-generated strategy from builder",
+          nodes,
+          edges
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        toast.success("Strategy deployed successfully!", {
+          description: `Strategy ID: ${result.strategyId}. Monitoring started.`
+        })
+        
+        // Start execution engine if not already running
+        await fetch("/api/execution-engine", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "start" })
+        })
+      } else {
+        toast.error("Deployment failed", {
+          description: result.error || "Unknown error occurred"
+        })
+      }
+    } catch (error) {
+      toast.error("Deployment failed", {
+        description: error instanceof Error ? error.message : "Network error"
+      })
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   const onDragStart = (event: React.DragEvent, item: PaletteItem) => {
     event.dataTransfer.setData("application/orbit-node", JSON.stringify(item))
     event.dataTransfer.effectAllowed = "move"
   }
 
-  const onDragOver = (event: React.DragEvent) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = "move"
-  }
-
   const onDrop = (event: React.DragEvent) => {
     event.preventDefault()
-
-    const raw = event.dataTransfer.getData("application/orbit-node")
-    if (!raw) return
-
-    console.log("Dropped item:", raw) // Debug log
-    const item = JSON.parse(raw) as PaletteItem | { type: "template", name: string, label: string }
-
     const bounds = wrapperRef.current?.getBoundingClientRect()
     if (!bounds) return
 
@@ -411,55 +414,12 @@ function FlowInner({
       y: event.clientY - bounds.top,
     })
 
-    // Check if it's a demo template
-    if ('type' in item && item.type === "template") {
-      const template = DEMO_TEMPLATES.find(t => t.name === item.name)
-      if (template) {
-        console.log("Found template:", template.name) // Debug log
-        const offsetX = position.x - 100 // Adjust template position
-        const offsetY = position.y - 100
-        
-        // Create nodes first with consistent IDs
-        const newNodes = template.nodes.map((node, index) => {
-          const nodeId = `${node.id}-${Math.random().toString(16).slice(2, 6)}`
-          return {
-            ...node,
-            id: nodeId,
-            position: {
-              x: node.position.x + offsetX,
-              y: node.position.y + offsetY
-            },
-            data: {
-              label: node.data.source ? `${node.data.source} Trigger` : node.type.charAt(0).toUpperCase() + node.type.slice(1),
-              nodeType: node.type as StrategyNodeType,
-              params: node.data,
-            }
-          }
-        })
-        
-        // Create edges with matching node IDs
-        const newEdges = template.edges.map((edge) => {
-          const sourceNode = newNodes.find(n => n.id.includes(edge.source))
-          const targetNode = newNodes.find(n => n.id.includes(edge.target))
-          
-          return {
-            ...edge,
-            id: `${edge.id}-${Math.random().toString(16).slice(2, 6)}`,
-            source: sourceNode?.id || edge.source,
-            target: targetNode?.id || edge.target
-          }
-        })
-
-        console.log("Adding nodes:", newNodes.length, "edges:", newEdges.length) // Debug log
-        setNodes((nds) => [...nds, ...newNodes])
-        setEdges((eds) => [...eds, ...newEdges])
-        return
-      }
-    }
+    const data = event.dataTransfer.getData("application/orbit-node")
+    const item = JSON.parse(data) as PaletteItem
 
     // Handle regular palette items
     if (!('defaults' in item)) {
-      console.log("Invalid palette item:", item) // Debug log
+      console.log("Invalid palette item:", item)
       return
     }
 
@@ -478,6 +438,11 @@ function FlowInner({
 
     setNodes((nds) => nds.concat(newNode))
     setSelectedId(id)
+  }
+
+  const onDragOver = (event: React.DragEvent) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
   }
 
   const [nodesCollapsed, setNodesCollapsed] = React.useState(false)
@@ -507,31 +472,6 @@ function FlowInner({
         </div>
         <Separator className="my-3" />
         <div className="space-y-4 max-h-96 overflow-y-auto">
-          <div className="grid gap-2">
-            <div className="text-xs font-medium text-muted-foreground">DEMO TEMPLATES</div>
-            {DEMO_TEMPLATES.map((template) => (
-              <div
-                key={template.name}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("application/orbit-node", JSON.stringify({ 
-                    type: "template", 
-                    name: template.name,
-                    label: template.label 
-                  }))
-                  e.dataTransfer.effectAllowed = "copy"
-                }}
-                className="hover:bg-accent flex cursor-grab items-center justify-between rounded-md border px-3 py-2 active:cursor-grabbing bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20"
-                title={template.description}
-              >
-                <div className="text-sm font-medium">{template.label}</div>
-                <div className="text-muted-foreground text-xs">template</div>
-              </div>
-            ))}
-          </div>
-          
-          <Separator />
-          
           <div className="grid gap-2">
             <div className="text-xs font-medium text-muted-foreground">BUILDING BLOCKS</div>
             {PALETTE.map((item) => (
@@ -587,17 +527,36 @@ function FlowInner({
         </div>
         <div className="text-muted-foreground flex items-center justify-between border-t px-3 py-2 text-xs">
           <div>Zoom: {(viewport.zoom * 100).toFixed(0)}%</div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setNodes([])
-              setEdges([])
-              setSelectedId(null)
-            }}
-          >
-            Clear
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              disabled={isDeploying}
+              onClick={deployStrategy}
+            >
+              {isDeploying ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></div>
+                  Deploying...
+                </>
+              ) : (
+                <>
+                  🚀 Deploy Strategy
+                </>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNodes([])
+                setEdges([])
+                setSelectedId(null)
+              }}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
       </div>
 

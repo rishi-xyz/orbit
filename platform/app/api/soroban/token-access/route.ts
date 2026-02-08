@@ -76,11 +76,13 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get vault token contract
-    let vaultTokenContract: string
+    // Check if using native XLM or token
+    let isNativeToken = false
+    let vaultTokenContract: string = "native"
+    
     try {
       console.log("🔍 [API:TokenAccess] Getting vault token contract...")
-      vaultTokenContract = String(
+      const tokenContractResult = String(
         await simulateContractCall<any>(
           server,
           source,
@@ -89,7 +91,16 @@ export async function POST(req: Request) {
           []
         )
       )
-      console.log("🔍 [API:TokenAccess] Vault token contract:", vaultTokenContract)
+      
+      // If contract returns "native" or empty, use native XLM
+      if (tokenContractResult === "native" || !tokenContractResult) {
+        isNativeToken = true
+        vaultTokenContract = "native"
+        console.log("🔍 [API:TokenAccess] Using native XLM token")
+      } else {
+        vaultTokenContract = tokenContractResult
+        console.log("🔍 [API:TokenAccess] Vault token contract:", vaultTokenContract)
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error"
       console.error("🔍 [API:TokenAccess] Failed to get vault token contract:", msg)
@@ -111,100 +122,90 @@ export async function POST(req: Request) {
 
     // Check token balance and trustline status
     let balance: bigint = BigInt(0)
-    let hasTrustline: boolean = false
+    let hasTrustline: boolean = true // Native XLM doesn't need trustline
     let trustlineError: string | null = null
-
-    console.log("🔍 [API:TokenAccess] Checking token balance and trustline...")
-    try {
-      const bal = await simulateContractCall<any>(
-        server,
-        source,
-        vaultTokenContract,
-        "balance",
-        [new Address(body.userAddress).toScVal()]
-      )
-      
-      balance = typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
-      hasTrustline = true
-      console.log("🔍 [API:TokenAccess] Balance check successful:", { balance: balance.toString(), hasTrustline })
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unknown error"
-      console.error("🔍 [API:TokenAccess] Balance check failed:", msg)
-      trustlineError = msg
-      hasTrustline = false
-      
-      // For demo purposes, provide a default balance but keep hasTrustline as false
-      if (msg.includes("trustline entry is missing")) {
-        balance = BigInt(10000000) // Demo balance for UI display
-        console.log("🔍 [API:TokenAccess] Trustline missing, using demo balance")
+    
+    console.log("🔍 [API:TokenAccess] Checking token balance...")
+    
+    if (isNativeToken) {
+      // For native XLM, get balance directly from account
+      try {
+        balance = BigInt(source.balances[0]?.balance || "0") // First balance is usually XLM
+        console.log("🔍 [API:TokenAccess] Native XLM balance:", balance.toString())
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Unknown error"
+        console.error("🔍 [API:TokenAccess] Failed to get XLM balance:", msg)
+        balance = BigInt(0)
+      }
+    } else {
+      // For token contracts, check balance via contract
+      try {
+        const bal = await simulateContractCall<any>(
+          server,
+          source,
+          vaultTokenContract,
+          "balance",
+          [new Address(body.userAddress).toScVal()]
+        )
+        
+        balance = typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
+        hasTrustline = true
+        console.log("🔍 [API:TokenAccess] Token balance check successful:", { balance: balance.toString(), hasTrustline })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Unknown error"
+        console.error("🔍 [API:TokenAccess] Token balance check failed:", msg)
+        trustlineError = msg
+        hasTrustline = false
+        
+        // For demo purposes, provide a default balance but keep hasTrustline as false
+        if (msg.includes("trustline entry is missing")) {
+          balance = BigInt(10000000) // Demo balance for UI display
+          console.log("🔍 [API:TokenAccess] Trustline missing, using demo balance")
+        }
       }
     }
 
     // Prepare trustline setup transaction if needed
     let trustlineXdr: string | null = null
-    if (!hasTrustline && trustlineError?.includes("trustline entry is missing")) {
-      console.log("🔧 [API:TokenAccess] Preparing trustline setup transaction...")
-      try {
-        // For Soroban tokens, we need to create a trustline using the native operation
-        // The token contract address needs to be converted to an Asset
-        const tokenAsset = Asset.native() // This is a placeholder - in reality, we'd need the specific token asset
-        
-        const tx = new TransactionBuilder(source, {
-          fee: "200000",
-          networkPassphrase: SOROBAN_NETWORK_PASSPHRASE,
-        })
-          // Create trustline operation
-          .addOperation(Operation.changeTrust({
-            asset: tokenAsset,
-            limit: "1000000000" // Large limit for demo purposes
-          }))
-          .setTimeout(60)
-          .build()
+    
+    if (isNativeToken) {
+      // Native XLM doesn't need trustline setup
+      console.log("🔧 [API:TokenAccess] Using native XLM - no trustline needed")
+    } else if (!hasTrustline && trustlineError?.includes("trustline entry is missing")) {
+      console.log("🔧 [API:TokenAccess] Soroban token trustline missing - providing manual setup instructions")
+      
+      // For Soroban tokens, traditional changeTrust operations don't work
+      // Users need to manually add the token through their wallet
+      const manualInstructions = `
+This is a Soroban token that requires manual setup:
 
-        const prepared = await server.prepareTransaction(tx)
-        trustlineXdr = prepared.toXDR()
-        trustlineError = "Please sign this transaction to establish a trustline for this token"
-        console.log("🔧 [API:TokenAccess] Trustline transaction prepared successfully")
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Unknown error"
-        console.error("🔧 [API:TokenAccess] Primary trustline setup failed:", msg)
-        
-        // Fallback: try the token contract approach for Soroban tokens
-        try {
-          console.log("🔧 [API:TokenAccess] Trying fallback token contract approach...")
-          const tokenContract = new Contract(vaultTokenContract)
-          
-          const tx = new TransactionBuilder(source, {
-            fee: "200000",
-            networkPassphrase: SOROBAN_NETWORK_PASSPHRASE,
-          })
-            // Try to initialize the token which may establish trustline
-            .addOperation(tokenContract.call("initialize", 
-              new Address(body.userAddress).toScVal()
-            ))
-            .setTimeout(60)
-            .build()
+Token Contract: ${vaultTokenContract}
 
-          const prepared = await server.prepareTransaction(tx)
-          trustlineXdr = prepared.toXDR()
-          trustlineError = "Please sign this transaction to establish token access"
-          console.log("🔧 [API:TokenAccess] Fallback transaction prepared successfully")
-        } catch (fallbackError) {
-          console.error("🔧 [API:TokenAccess] Fallback also failed:", fallbackError)
-          trustlineError = `Failed to prepare trustline setup: ${msg}. Fallback also failed: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
-        }
-      }
+To add this token to your wallet:
+1. Open your Stellar wallet (Freighter, Albedo, etc.)
+2. Go to "Add Token" or "Manage Trustlines"
+3. Choose "Add Custom Token"
+4. Enter the contract address: ${vaultTokenContract}
+5. Set a limit (recommended: 1000000000)
+6. Approve the transaction
+
+After adding the token, return here and try investing again.
+      `.trim()
+      
+      console.log("🔧 [API:TokenAccess] Manual setup instructions prepared")
+      trustlineError = manualInstructions
     }
 
     const response = NextResponse.json({
       userAddress: body.userAddress,
       tokenContract: vaultTokenContract,
+      isNativeToken: isNativeToken,
       hasTrustline: hasTrustline,
       balance: balance.toString(),
       trustlineError: trustlineError,
       trustlineXdr: trustlineXdr,
       canInvest: hasTrustline,
-      message: hasTrustline ? "Token access ready for investing" : "Token trustline setup required"
+        message: hasTrustline ? (isNativeToken ? "Ready to invest with XLM" : "Token access ready for investing") : "Token trustline setup required - see instructions below"
     })
     
     console.log("🔍 [API:TokenAccess] Final response:", {

@@ -14,6 +14,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
     needsTrustlineSetup: boolean
     trustlineXdr?: string
     tokenContract?: string
+    isNativeToken?: boolean
     message?: string
   } | null>(null)
 
@@ -42,12 +43,16 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       
       if (response.ok) {
         const data = await response.json()
-        console.log("🔍 [Token Access] Response data:", data)
+        console.log("🔍 [Token Access] Response data:", JSON.stringify(data, null, 2))
+        
+        const isNative = data.isNativeToken || data.tokenContract === "native"
+        
         setTokenAccessStatus({
           hasTrustline: data.hasTrustline,
-          needsTrustlineSetup: !data.hasTrustline && !!data.trustlineXdr,
+          needsTrustlineSetup: !data.hasTrustline && !isNative && !!data.trustlineXdr,
           trustlineXdr: data.trustlineXdr,
           tokenContract: data.tokenContract,
+          isNativeToken: isNative,
           message: data.message,
         })
         return data
@@ -163,8 +168,8 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
 
     console.log("💰 [Invest] Starting investment process for algo:", algoId)
     const raw = window.prompt(
-      `Enter invest amount (stroops / token base units) for algo #${algoId}`,
-      "10000000"
+      `Enter invest amount (stroops) for algo #${algoId}\n\n💡 Demo: Enter 10000000 for 1 token`,
+      "10000000" // 1 token in stroops
     )
 
     if (!raw) return
@@ -182,11 +187,11 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       // Check token access first
       console.log("💰 [Invest] Checking token access...")
       const tokenAccess = await checkTokenAccess(from)
-      console.log("💰 [Invest] Token access result:", tokenAccess)
+      console.log("💰 [Invest] Token access result:", JSON.stringify(tokenAccess, null, 2))
       
       if (!tokenAccess?.hasTrustline) {
-        console.log("💰 [Invest] Trustline not established, showing setup UI")
-        // Trustline setup is required - the UI will show the setup button
+        console.log("💰 [Invest] Access not established, showing setup UI")
+        // Access setup is required - UI will show the setup button
         return
       }
 
@@ -268,6 +273,29 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       toast.success("Investment submitted", {
         description: submitJson?.hash ? `Tx: ${submitJson.hash}` : `algo #${algoId}`,
       })
+
+      // Store investment data for portfolio (in real app, this would be saved to backend)
+      const investmentData = {
+        id: Date.now().toString(),
+        algoId,
+        algoName: `Strategy #${algoId}`,
+        amount,
+        timestamp: new Date(),
+        txHash: submitJson?.hash,
+        status: "pending" as const
+      }
+      
+      // Store in localStorage for demo purposes
+      const existingInvestments = JSON.parse(localStorage.getItem('investments') || '[]')
+      existingInvestments.push(investmentData)
+      localStorage.setItem('investments', JSON.stringify(existingInvestments))
+      
+      // Show additional success toast with portfolio update info
+      setTimeout(() => {
+        toast.success("Portfolio updated", {
+          description: "Your investment has been added to your portfolio."
+        })
+      }, 2000)
     } catch (e) {
       console.error("💰 [Invest] Invest failed:", e)
       toast.error("Invest failed", {
@@ -280,61 +308,121 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
 
   return (
     <div className="space-y-2">
-      {tokenAccessStatus?.needsTrustlineSetup && (
+      {tokenAccessStatus?.needsTrustlineSetup && !tokenAccessStatus?.isNativeToken && (
         <Alert className="border-blue-200 bg-blue-50">
           <AlertDescription className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
               <p className="font-medium text-blue-900">Token Access Required</p>
             </div>
-            <p className="text-sm text-blue-800">
-              You need to approve the token contract before investing. This is a one-time setup that allows the platform to check your token balance.
+            <p className="text-sm text-blue-800 whitespace-pre-line">
+              {tokenAccessStatus.message}
             </p>
-            <div className="bg-white p-3 rounded border border-blue-200">
-              <p className="text-xs font-mono text-blue-700 mb-2">Token Contract:</p>
-              <p className="text-xs font-mono break-all text-blue-600">
-                {tokenAccessStatus.tokenContract}
-              </p>
+            {tokenAccessStatus.tokenContract && (
+              <div className="bg-white p-3 rounded border border-blue-200">
+                <p className="text-xs font-mono text-blue-700 mb-2">Token Contract:</p>
+                <p className="text-xs font-mono break-all text-blue-600">
+                  {tokenAccessStatus.tokenContract}
+                </p>
+              </div>
+            )}
+            <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+              <p className="text-xs font-medium text-yellow-800 mb-2">📋 Quick Setup Guide:</p>
+              <ol className="text-xs text-yellow-700 space-y-1 list-decimal list-inside">
+                <li><strong>Install Freighter Extension</strong> if not already installed</li>
+                <li><strong>Open Freighter</strong> and unlock your wallet</li>
+                <li><strong>Click "Tokens"</strong> → <strong>"Add Token"</strong></li>
+                <li><strong>Search Contract:</strong> paste the address above</li>
+                <li><strong>Set Limit:</strong> enter 1000000000</li>
+                <li><strong>Approve Transaction</strong> with your password</li>
+                <li className="font-semibold text-green-700">✅ Return here and click "Invest Tokens"</li>
+              </ol>
+              <div className="mt-2 p-2 bg-white rounded border border-yellow-300">
+                <p className="text-xs font-medium text-yellow-800">🔗 Or use Demo Mode above to test immediately!</p>
+              </div>
             </div>
-            <Button
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={loading}
-              onClick={async () => {
-                const from = await ensureWalletConnected()
-                if (from) {
-                  const success = await setupTokenTrustline(from)
-                  if (success) {
-                    toast.success("Token access established! You can now invest.", {
-                      description: "Your wallet can now interact with the token contract.",
-                    })
+            {tokenAccessStatus.trustlineXdr ? (
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={loading}
+                onClick={async () => {
+                  const from = await ensureWalletConnected()
+                  if (from) {
+                    const success = await setupTokenTrustline(from)
+                    if (success) {
+                      toast.success("Token access established! You can now invest.", {
+                        description: "Your wallet can now interact with the token contract.",
+                      })
+                    }
                   }
-                }
-              }}
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Setting up Token Access...
-                </>
-              ) : (
-                <>
-                  <div className="w-4 h-4 mr-2">🔐</div>
-                  Approve Token Contract
-                </>
-              )}
-            </Button>
+                }}
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Setting up Token Access...
+                  </>
+                ) : (
+                  <>
+                    <div className="w-4 h-4 mr-2">🔐</div>
+                    Approve Token Contract
+                  </>
+                )}
+              </Button>
+            ) : (
+              <div className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
+                ⚠️ This token requires manual setup through your wallet. Follow the instructions above.
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}
       
-      <Button
-        size="sm"
-        disabled={loading || tokenAccessStatus?.needsTrustlineSetup}
-        onClick={onInvest}
-      >
-        {loading ? "Investing..." : "Invest"}
-      </Button>
+      {tokenAccessStatus?.isNativeToken && (
+        <Alert className="border-green-200 bg-green-50">
+          <AlertDescription className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <p className="font-medium text-green-900">✨ Ready to Invest with XLM</p>
+            </div>
+            <p className="text-sm text-green-800">
+              No token setup required! You can invest directly with native XLM (Stellar Lumen).
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="space-y-2">
+        {tokenAccessStatus?.needsTrustlineSetup && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              // Enable demo mode for testing
+              toast.success("Demo Mode Enabled", {
+                description: "You can now test investment without token setup."
+              })
+              setTokenAccessStatus({
+                ...tokenAccessStatus,
+                hasTrustline: true,
+                needsTrustlineSetup: false,
+                message: "Demo mode - token access simulated"
+              })
+            }}
+          >
+            🎮 Enable Demo Mode (Test Investment)
+          </Button>
+        )}
+        
+        <Button
+          size="sm"
+          disabled={loading || tokenAccessStatus?.needsTrustlineSetup}
+          onClick={onInvest}
+        >
+          {loading ? "Investing..." : `Invest ${tokenAccessStatus?.isNativeToken ? 'XLM' : 'Tokens'}`}
+        </Button>
+      </div>
     </div>
   )
 }

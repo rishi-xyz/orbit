@@ -107,8 +107,10 @@ export async function POST(req: Request) {
     }
 
     let vaultTokenContract: string
+    let isNativeToken = false
+    
     try {
-      vaultTokenContract = String(
+      const tokenContractResult = String(
         await simulateContractCall<any>(
           server,
           source,
@@ -117,6 +119,14 @@ export async function POST(req: Request) {
           []
         )
       )
+      
+      // If contract returns "native" or empty, use native XLM
+      if (tokenContractResult === "native" || !tokenContractResult) {
+        isNativeToken = true
+        vaultTokenContract = "native"
+      } else {
+        vaultTokenContract = tokenContractResult
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error"
       const lowered = msg.toLowerCase()
@@ -144,14 +154,14 @@ export async function POST(req: Request) {
       
       const tokenAccess = await tokenAccessResponse.json()
       
-      if (!tokenAccess.hasTrustline) {
+      if (!tokenAccess.hasTrustline && !tokenAccess.isNativeToken) {
         return NextResponse.json(
           {
             error: tokenAccess.trustlineError || "Token trustline not established",
             needsTrustlineSetup: true,
             tokenContract: vaultTokenContract,
             trustlineXdr: tokenAccess.trustlineXdr,
-            message: "Please establish token access first before investing."
+            message: tokenAccess.isNativeToken ? "Ready to invest with XLM" : "Please establish token access first before investing."
           },
           { status: 400 }
         )
@@ -163,10 +173,10 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              `Insufficient token balance to invest. ` +
-              `Token contract: ${vaultTokenContract}. ` +
-              `Balance: ${balance.toString()}, required: ${amount.toString()}. ` +
-              `You need this Soroban token in your wallet before depositing into the vault.`,
+              `Insufficient balance to invest. ` +
+              `Using ${isNativeToken ? 'native XLM' : `token ${vaultTokenContract}`}. ` +
+              `Balance: ${balance.toString()} stroops, required: ${amount.toString()} stroops. ` +
+              `${isNativeToken ? 'Make sure your wallet has enough XLM (including minimum reserve).' : 'You need this token in your wallet before depositing into the vault.'}`,
           },
           { status: 400 }
         )
@@ -175,36 +185,53 @@ export async function POST(req: Request) {
       const msg = e instanceof Error ? e.message : "Unknown error"
       // Fallback to direct balance check if token access API fails
       try {
-        const bal = await simulateContractCall<any>(
-          server,
-          source,
-          vaultTokenContract,
-          "balance",
-          [new Address(body.from).toScVal()]
-        )
-
-        const balance =
-          typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
-
-        if (balance < amount) {
-          return NextResponse.json(
-            {
-              error:
-                `Insufficient token balance to invest. ` +
-                `Token contract: ${vaultTokenContract}. ` +
-                `Balance: ${balance.toString()}, required: ${amount.toString()}. ` +
-                `You need this Soroban token in your wallet before depositing into the vault.`,
-            },
-            { status: 400 }
+        if (isNativeToken) {
+          // For native XLM, get balance directly from account
+          const balance = BigInt(source.balances[0]?.balance || "0")
+          
+          if (balance < amount) {
+            return NextResponse.json(
+              {
+                error:
+                  `Insufficient XLM balance to invest. ` +
+                  `Balance: ${balance.toString()} stroops, required: ${amount.toString()} stroops. ` +
+                  `Make sure your wallet has enough XLM (including minimum reserve).`,
+              },
+              { status: 400 }
+            )
+          }
+        } else {
+          const bal = await simulateContractCall<any>(
+            server,
+            source,
+            vaultTokenContract,
+            "balance",
+            [new Address(body.from).toScVal()]
           )
+
+          const balance =
+            typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
+
+          if (balance < amount) {
+            return NextResponse.json(
+              {
+                error:
+                  `Insufficient token balance to invest. ` +
+                  `Token contract: ${vaultTokenContract}. ` +
+                  `Balance: ${balance.toString()}, required: ${amount.toString()}. ` +
+                  `You need this token in your wallet before depositing into the vault.`,
+              },
+              { status: 400 }
+            )
+          }
         }
       } catch (balanceError) {
         const balanceMsg = balanceError instanceof Error ? balanceError.message : "Unknown error"
         return NextResponse.json(
           {
             error:
-              `Could not fetch token balance for investor. ` +
-              `Token contract: ${vaultTokenContract}. Details: ${balanceMsg}`,
+              `Could not fetch balance for investor. ` +
+              `Using ${isNativeToken ? 'native XLM' : `token ${vaultTokenContract}`}. Details: ${balanceMsg}`,
           },
           { status: 400 }
         )

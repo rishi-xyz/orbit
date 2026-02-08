@@ -63,7 +63,7 @@ export default function DashboardPage() {
                 <Link href="/builder">Create Strategy</Link>
               </Button>
               <Button variant="outline" asChild className="w-full">
-                <Link href="/demo-strategies">View Demos</Link>
+                <Link href="/builder">Create Strategy</Link>
               </Button>
             </CardContent>
           </Card>
@@ -94,7 +94,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Start with demo strategies to understand how automated trading works on Stellar.
+                Start with our strategy templates to understand how automated trading works on Stellar.
               </p>
             </CardContent>
           </Card>
@@ -120,9 +120,9 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div className="space-y-2">
-                <h3 className="font-medium">💎 Demo Strategies</h3>
+                <h3 className="font-medium">🎯 Strategy Templates</h3>
                 <p className="text-sm text-muted-foreground">
-                  Pre-built strategies for learning and testing
+                  DCA and Moving Average templates in the builder
                 </p>
               </div>
             </div>

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CoinsIcon, HammerIcon, LayoutDashboardIcon, LayersIcon, TrendingUpIcon, PlayIcon } from "lucide-react"
+import { CoinsIcon, HammerIcon, LayoutDashboardIcon, LayersIcon, TrendingUpIcon, PlayIcon, BriefcaseIcon, TestTubeIcon } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
 import { WalletConnect } from "@/components/wallet-connect"
@@ -36,7 +36,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ? "Demo Strategies"
           : pathname === "/dashboard"
             ? "Dashboard"
-            : "Stellar (XLM)"
+            : pathname === "/portfolio"
+              ? "Portfolio"
+              : pathname === "/test-strategy"
+                ? "Test Strategy"
+                : "Stellar (XLM)"
 
   return (
     <SidebarProvider defaultOpen>
@@ -110,15 +114,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === "/demo-strategies"}
-                    tooltip="Demo Strategies"
+                    isActive={pathname === "/test-strategy"}
+                    tooltip="Test Strategy"
                   >
-                    <Link href="/demo-strategies">
-                      <PlayIcon />
-                      <span>Demo</span>
+                    <Link href="/test-strategy">
+                      <TestTubeIcon />
+                      <span>Test Strategy</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/portfolio"}
+                    tooltip="Portfolio"
+                  >
+                    <Link href="/portfolio">
+                      <BriefcaseIcon />
+                      <span>Portfolio</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -135,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       <SidebarInset>
-        <div className="bg-background/60 supports-[backdrop-filter]:bg-background/40 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 backdrop-blur">
+        <div className="bg-background/60 supports-backdrop-filter:bg-background/40 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 backdrop-blur">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-5" />
           <div className="min-w-0 flex-1">
