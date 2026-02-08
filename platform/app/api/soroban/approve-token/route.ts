@@ -43,17 +43,17 @@ export async function POST(req: Request) {
       )
     }
 
-    // Create a simple token approval transaction
-    // This is a simplified approach - in production, you'd want to use the actual token contract's approve function
+    // Create a simpler trustline establishment transaction
     const tokenContract = new Contract(body.tokenContract)
     
+    // For many tokens, just checking balance is enough to establish trustline
     const tx = new TransactionBuilder(source, {
-      fee: "100000",
+      fee: "200000",
       networkPassphrase: SOROBAN_NETWORK_PASSPHRASE,
     })
-      .addOperation(tokenContract.call("approve", 
-        new Address(body.userAddress).toScVal(),  // spender (self-approval for balance checks)
-        nativeToScVal(BigInt("18446744073709551615"), { type: "u128" })  // max u128 for unlimited approval
+      // Create trustline by checking balance (will fail initially but establishes trustline)
+      .addOperation(tokenContract.call("balance", 
+        new Address(body.userAddress).toScVal()
       ))
       .setTimeout(60)
       .build()

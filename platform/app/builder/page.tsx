@@ -183,43 +183,46 @@ export default function BuilderPage() {
 
         <Separator />
 
-        <div className="grid gap-6 lg:grid-cols-3 xl:grid-cols-4">
-          <Card className="lg:col-span-2 xl:col-span-3">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Build strategy</CardTitle>
             <CardDescription>
-              Drag nodes, connect them, then publish. The flow JSON is hashed to generate the
+              Drag nodes, connect them, then publish. The flow JSON is hashed to generate
               on-chain params hash.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="grid gap-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g. XLM Momentum v1"
-                  {...form.register("name")}
-                />
-                {form.formState.errors.name ? (
-                  <p className="text-destructive text-xs">
-                    {form.formState.errors.name.message}
-                  </p>
-                ) : null}
-              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g. XLM Momentum v1"
+                    {...form.register("name")}
+                  />
+                  {form.formState.errors.name ? (
+                    <p className="text-destructive text-xs">
+                      {form.formState.errors.name.message}
+                    </p>
+                  ) : null}
+                </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  placeholder="Short description"
-                  {...form.register("description")}
-                />
+                <div className="grid gap-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    placeholder="Short description"
+                    {...form.register("description")}
+                  />
+                </div>
               </div>
 
               <div className="grid gap-2">
                 <Label>Canvas</Label>
-                <StrategyFlowBuilder value={flow} onChange={setFlow} />
+                <div className="min-h-[700px]">
+                  <StrategyFlowBuilder value={flow} onChange={setFlow} />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3">
@@ -231,16 +234,8 @@ export default function BuilderPage() {
           </CardContent>
         </Card>
 
-        </div>
 
-        <div className="space-y-6">
-          {pubKey && (
-            <CreatorVaultManager creatorAddress={pubKey} />
-          )}
-          
-          <ExecutionEngineControl />
-        </div>
       </div>
-    </AppShell>
+    </AppShell >
   )
 }

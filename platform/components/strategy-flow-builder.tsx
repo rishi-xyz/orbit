@@ -90,6 +90,67 @@ const PALETTE: PaletteItem[] = [
   },
 ]
 
+const DEMO_TEMPLATES = [
+  {
+    name: "DCA Strategy",
+    label: "💎 DCA Strategy",
+    description: "Dollar Cost Averaging - safest for beginners",
+    nodes: [
+      {
+        id: "dca-timer",
+        type: "trigger",
+        position: { x: 100, y: 100 },
+        data: { source: "timer", intervalSec: 86400 } // Daily
+      },
+      {
+        id: "dca-condition",
+        type: "condition", 
+        position: { x: 300, y: 100 },
+        data: { field: "price", operator: "<", value: 0.15 }
+      },
+      {
+        id: "dca-buy",
+        type: "buy",
+        position: { x: 500, y: 100 },
+        data: { asset: "XLM", amount: 50, denom: "USDC" }
+      }
+    ],
+    edges: [
+      { id: "dca-e1", source: "dca-timer", target: "dca-condition" },
+      { id: "dca-e2", source: "dca-condition", target: "dca-buy" }
+    ]
+  },
+  {
+    name: "Moving Average",
+    label: "📊 Moving Average",
+    description: "Technical analysis with moving averages",
+    nodes: [
+      {
+        id: "ma-trigger",
+        type: "trigger",
+        position: { x: 100, y: 100 },
+        data: { source: "coingecko", symbol: "XLM", intervalSec: 300 } // 5 min
+      },
+      {
+        id: "ma-condition",
+        type: "condition",
+        position: { x: 300, y: 100 },
+        data: { field: "ma_cross", operator: ">", value: 1.0 }
+      },
+      {
+        id: "ma-buy",
+        type: "buy",
+        position: { x: 500, y: 100 },
+        data: { asset: "XLM", amount: 100, denom: "USDC" }
+      }
+    ],
+    edges: [
+      { id: "ma-e1", source: "ma-trigger", target: "ma-condition" },
+      { id: "ma-e2", source: "ma-condition", target: "ma-buy" }
+    ]
+  }
+]
+
 const NODE_TYPES = {} as const
 const EDGE_TYPES = {} as const
 
@@ -339,7 +400,8 @@ function FlowInner({
     const raw = event.dataTransfer.getData("application/orbit-node")
     if (!raw) return
 
-    const item = JSON.parse(raw) as PaletteItem
+    console.log("Dropped item:", raw) // Debug log
+    const item = JSON.parse(raw) as PaletteItem | { type: "template", name: string, label: string }
 
     const bounds = wrapperRef.current?.getBoundingClientRect()
     if (!bounds) return
@@ -348,6 +410,58 @@ function FlowInner({
       x: event.clientX - bounds.left,
       y: event.clientY - bounds.top,
     })
+
+    // Check if it's a demo template
+    if ('type' in item && item.type === "template") {
+      const template = DEMO_TEMPLATES.find(t => t.name === item.name)
+      if (template) {
+        console.log("Found template:", template.name) // Debug log
+        const offsetX = position.x - 100 // Adjust template position
+        const offsetY = position.y - 100
+        
+        // Create nodes first with consistent IDs
+        const newNodes = template.nodes.map((node, index) => {
+          const nodeId = `${node.id}-${Math.random().toString(16).slice(2, 6)}`
+          return {
+            ...node,
+            id: nodeId,
+            position: {
+              x: node.position.x + offsetX,
+              y: node.position.y + offsetY
+            },
+            data: {
+              label: node.data.source ? `${node.data.source} Trigger` : node.type.charAt(0).toUpperCase() + node.type.slice(1),
+              nodeType: node.type as StrategyNodeType,
+              params: node.data,
+            }
+          }
+        })
+        
+        // Create edges with matching node IDs
+        const newEdges = template.edges.map((edge) => {
+          const sourceNode = newNodes.find(n => n.id.includes(edge.source))
+          const targetNode = newNodes.find(n => n.id.includes(edge.target))
+          
+          return {
+            ...edge,
+            id: `${edge.id}-${Math.random().toString(16).slice(2, 6)}`,
+            source: sourceNode?.id || edge.source,
+            target: targetNode?.id || edge.target
+          }
+        })
+
+        console.log("Adding nodes:", newNodes.length, "edges:", newEdges.length) // Debug log
+        setNodes((nds) => [...nds, ...newNodes])
+        setEdges((eds) => [...eds, ...newEdges])
+        return
+      }
+    }
+
+    // Handle regular palette items
+    if (!('defaults' in item)) {
+      console.log("Invalid palette item:", item) // Debug log
+      return
+    }
 
     const id = slug(item.type)
 
@@ -366,36 +480,93 @@ function FlowInner({
     setSelectedId(id)
   }
 
+  const [nodesCollapsed, setNodesCollapsed] = React.useState(false)
+  const [inspectorCollapsed, setInspectorCollapsed] = React.useState(false)
+
   return (
-    <div className={cn("grid gap-4 lg:grid-cols-[260px_1fr_320px]", className)}>
-      <div className="rounded-xl border p-3">
-        <div className="text-sm font-medium">Nodes</div>
-        <div className="text-muted-foreground mt-1 text-xs">
-          Drag onto canvas
+    <div className={cn("grid gap-4 h-full", className)} style={{ 
+      gridTemplateColumns: nodesCollapsed ? '0fr 1fr' : inspectorCollapsed ? '260px 1fr 0fr' : '260px 1fr 320px',
+      transition: 'grid-template-columns 0.3s ease-in-out'
+    }}>
+      <div className={`rounded-xl border p-3 ${nodesCollapsed ? 'hidden' : ''} transition-all duration-300`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Nodes</div>
+            <div className="text-muted-foreground mt-1 text-xs">
+              Drag onto canvas
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setNodesCollapsed(true)}
+            className="h-8 w-8 p-0"
+          >
+            ←
+          </Button>
         </div>
         <Separator className="my-3" />
-        <div className="grid gap-2">
-          {PALETTE.map((item) => (
-            <div
-              key={item.type}
-              draggable
-              onDragStart={(e) => onDragStart(e, item)}
-              className="hover:bg-accent flex cursor-grab items-center justify-between rounded-md border px-3 py-2 active:cursor-grabbing"
-            >
-              <div className="text-sm font-medium">{item.label}</div>
-              <div className="text-muted-foreground text-xs">{item.type}</div>
-            </div>
-          ))}
+        <div className="space-y-4 max-h-96 overflow-y-auto">
+          <div className="grid gap-2">
+            <div className="text-xs font-medium text-muted-foreground">DEMO TEMPLATES</div>
+            {DEMO_TEMPLATES.map((template) => (
+              <div
+                key={template.name}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/orbit-node", JSON.stringify({ 
+                    type: "template", 
+                    name: template.name,
+                    label: template.label 
+                  }))
+                  e.dataTransfer.effectAllowed = "copy"
+                }}
+                className="hover:bg-accent flex cursor-grab items-center justify-between rounded-md border px-3 py-2 active:cursor-grabbing bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20"
+                title={template.description}
+              >
+                <div className="text-sm font-medium">{template.label}</div>
+                <div className="text-muted-foreground text-xs">template</div>
+              </div>
+            ))}
+          </div>
+          
+          <Separator />
+          
+          <div className="grid gap-2">
+            <div className="text-xs font-medium text-muted-foreground">BUILDING BLOCKS</div>
+            {PALETTE.map((item) => (
+              <div
+                key={item.type}
+                draggable
+                onDragStart={(e) => onDragStart(e, item)}
+                className="hover:bg-accent flex cursor-grab items-center justify-between rounded-md border px-3 py-2 active:cursor-grabbing"
+              >
+                <div className="text-sm font-medium">{item.label}</div>
+                <div className="text-muted-foreground text-xs">{item.type}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
+      {nodesCollapsed && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setNodesCollapsed(false)}
+          className="h-8 w-8 p-0 self-start"
+        >
+          →
+        </Button>
+      )}
+
       <div
         ref={wrapperRef}
-        className="rounded-xl border"
+        className="rounded-xl border flex flex-col"
         onDrop={onDrop}
         onDragOver={onDragOver}
       >
-        <div className="h-[560px]">
+        <div className="flex-1" style={{ minHeight: '600px' }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -430,10 +601,22 @@ function FlowInner({
         </div>
       </div>
 
-      <div className="rounded-xl border p-3">
-        <div className="text-sm font-medium">Inspector</div>
-        <div className="text-muted-foreground mt-1 text-xs">
-          Edit selected node params
+      <div className={`rounded-xl border p-3 ${inspectorCollapsed ? 'hidden' : ''} transition-all duration-300`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Inspector</div>
+            <div className="text-muted-foreground mt-1 text-xs">
+              Edit selected node params
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setInspectorCollapsed(true)}
+            className="h-8 w-8 p-0"
+          >
+            →
+          </Button>
         </div>
         <Separator className="my-3" />
         <NodeInspector
@@ -443,6 +626,17 @@ function FlowInner({
           }}
         />
       </div>
+
+      {inspectorCollapsed && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setInspectorCollapsed(false)}
+          className="h-8 w-8 p-0 self-start"
+        >
+          ←
+        </Button>
+      )}
     </div>
   )
 }

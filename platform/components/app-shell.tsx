@@ -34,7 +34,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? "Strategy Builder"
         : pathname === "/demo-strategies"
           ? "Demo Strategies"
-          : "Stellar (XLM)"
+          : pathname === "/dashboard"
+            ? "Dashboard"
+            : "Stellar (XLM)"
 
   return (
     <SidebarProvider defaultOpen>
@@ -63,10 +65,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={pathname === "/"}
+                    isActive={pathname === "/dashboard"}
                     tooltip="Dashboard"
                   >
-                    <Link href="/">
+                    <Link href="/dashboard">
                       <LayoutDashboardIcon />
                       <span>Dashboard</span>
                     </Link>

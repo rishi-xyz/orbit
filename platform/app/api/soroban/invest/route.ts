@@ -42,14 +42,17 @@ async function simulateContractCall<T>(
 }
 
 export async function POST(req: Request) {
+  console.log("💰 [API:Invest] Starting investment preparation")
   try {
     const body = (await req.json()) as {
       from?: string
       amount?: string | number
       algoId?: number
     }
+    console.log("💰 [API:Invest] Request body:", body)
 
     if (!body?.from) {
+      console.error("💰 [API:Invest] Missing from address")
       return NextResponse.json({ error: "Missing required field: from" }, { status: 400 })
     }
 

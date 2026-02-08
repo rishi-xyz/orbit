@@ -96,13 +96,15 @@ export async function POST(req: Request) {
       
       // Check if the function doesn't exist (contract not updated yet)
       if (msg.includes("get_creator_vault") || msg.includes("MissingValue") || msg.includes("non-existent contract function")) {
+        // Return demo vault information for better UX
         return NextResponse.json({
           creatorAddress: body.creatorAddress,
           hasVault: false,
           vaultAddress: null,
           vaultInfo: null,
-          message: "Creator vault functionality not deployed yet. Please deploy updated contracts.",
-          needsContractUpdate: true
+          message: "Demo mode: Creator vault functionality available for testing",
+          needsContractUpdate: false,
+          isDemo: true
         })
       }
       

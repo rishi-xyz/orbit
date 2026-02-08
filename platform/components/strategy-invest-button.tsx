@@ -30,6 +30,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
   }
 
   async function checkTokenAccess(userAddress: string) {
+    console.log("🔍 [Token Access] Checking token access for address:", userAddress)
     try {
       const response = await fetch("/api/soroban/token-access", {
         method: "POST",
@@ -37,8 +38,11 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         body: JSON.stringify({ userAddress }),
       })
 
+      console.log("🔍 [Token Access] Response status:", response.status)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log("🔍 [Token Access] Response data:", data)
         setTokenAccessStatus({
           hasTrustline: data.hasTrustline,
           needsTrustlineSetup: !data.hasTrustline && !!data.trustlineXdr,
@@ -47,16 +51,21 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
           message: data.message,
         })
         return data
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("🔍 [Token Access] Error response:", errorData)
       }
     } catch (e) {
-      console.error("Failed to check token access:", e)
+      console.error("🔍 [Token Access] Failed to check token access:", e)
     }
     return null
   }
 
   async function setupTokenTrustline(userAddress: string) {
+    console.log("🔧 [Trustline Setup] Starting trustline setup for address:", userAddress)
     try {
       // Get token approval transaction
+      console.log("🔧 [Trustline Setup] Fetching approval transaction...")
       const approvalRes = await fetch("/api/soroban/approve-token", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -66,15 +75,20 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         }),
       })
 
+      console.log("🔧 [Trustline Setup] Approval response status:", approvalRes.status)
+
       if (!approvalRes.ok) {
         const error = await approvalRes.json()
+        console.error("🔧 [Trustline Setup] Approval failed:", error)
         throw new Error(error.error || "Failed to prepare token approval")
       }
 
       const approvalData = await approvalRes.json()
+      console.log("🔧 [Trustline Setup] Approval data:", approvalData)
       
       // Check if no approval is needed
       if (approvalData.noApprovalNeeded) {
+        console.log("🔧 [Trustline Setup] No approval needed")
         toast.success("Token access ready", {
           description: approvalData.message,
         })
@@ -83,6 +97,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       }
 
       // Sign and submit the approval transaction
+      console.log("🔧 [Trustline Setup] Requesting wallet signature...")
       let signedTxXdr: string | undefined
       try {
         const res = await StellarWalletsKit.signTransaction(approvalData.xdr, {
@@ -90,9 +105,12 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
           address: userAddress,
         })
         signedTxXdr = res?.signedTxXdr
+        console.log("🔧 [Trustline Setup] Wallet signed transaction successfully")
       } catch (e) {
+        console.error("🔧 [Trustline Setup] Wallet signing failed:", e)
         const msg = e instanceof Error ? e.message : String(e)
         if (msg.toLowerCase().includes("not currently connected")) {
+          console.log("🔧 [Trustline Setup] Wallet not connected, showing auth modal...")
           const res = (await StellarWalletsKit.authModal()) as { address: string }
           const retryAddr = res?.address || userAddress
           const retry = await StellarWalletsKit.signTransaction(approvalData.xdr, {
@@ -109,6 +127,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         throw new Error("Wallet did not return a signed transaction")
       }
 
+      console.log("🔧 [Trustline Setup] Submitting signed transaction...")
       const submitRes = await fetch("/api/soroban/submit", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -116,6 +135,8 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       })
 
       const submitJson = await submitRes.json().catch(() => ({}))
+      console.log("🔧 [Trustline Setup] Submit response:", { status: submitRes.status, data: submitJson })
+      
       if (!submitRes.ok) {
         throw new Error(submitJson?.error ?? "Token approval failed")
       }
@@ -125,9 +146,11 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       })
 
       // Re-check token access after setup
+      console.log("🔧 [Trustline Setup] Re-checking token access after setup...")
       await checkTokenAccess(userAddress)
       return true
     } catch (e) {
+      console.error("🔧 [Trustline Setup] Token approval failed:", e)
       toast.error("Token approval failed", {
         description: e instanceof Error ? e.message : "Unknown error",
       })
@@ -138,6 +161,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
   async function onInvest() {
     if (loading) return
 
+    console.log("💰 [Invest] Starting investment process for algo:", algoId)
     const raw = window.prompt(
       `Enter invest amount (stroops / token base units) for algo #${algoId}`,
       "10000000"
@@ -147,35 +171,41 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
     const amount = raw.trim()
     if (!amount) return
 
+    console.log("💰 [Invest] Investment amount:", amount)
     setLoading(true)
     try {
       const from = await ensureWalletConnected()
       if (!from) throw new Error("Wallet did not return an address")
+      
+      console.log("💰 [Invest] Connected wallet address:", from)
 
       // Check token access first
+      console.log("💰 [Invest] Checking token access...")
       const tokenAccess = await checkTokenAccess(from)
+      console.log("💰 [Invest] Token access result:", tokenAccess)
+      
       if (!tokenAccess?.hasTrustline) {
-        if (tokenAccess?.trustlineXdr) {
-          const setupSuccess = await setupTokenTrustline(from)
-          if (!setupSuccess) {
-            throw new Error("Failed to setup token access. Please try again.")
-          }
-        } else {
-          throw new Error(tokenAccess?.message || "Token access not available")
-        }
+        console.log("💰 [Invest] Trustline not established, showing setup UI")
+        // Trustline setup is required - the UI will show the setup button
+        return
       }
 
+      console.log("💰 [Invest] Preparing investment transaction...")
       const prepareRes = await fetch("/api/soroban/invest", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ from, amount, algoId }),
       })
 
+      console.log("💰 [Invest] Prepare response status:", prepareRes.status)
+
       if (!prepareRes.ok) {
         const j = await prepareRes.json().catch(() => ({}))
+        console.error("💰 [Invest] Prepare failed:", j)
         
         // Handle trustline setup requirement
         if (j.needsTrustlineSetup && j.trustlineXdr) {
+          console.log("💰 [Invest] Trustline setup required from invest endpoint")
           setTokenAccessStatus({
             hasTrustline: false,
             needsTrustlineSetup: true,
@@ -190,6 +220,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       }
 
       const { xdr } = (await prepareRes.json()) as { xdr: string }
+      console.log("💰 [Invest] Got transaction XDR, requesting signature...")
 
       let signedTxXdr: string | undefined
       try {
@@ -198,9 +229,12 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
           address: from,
         })
         signedTxXdr = res?.signedTxXdr
+        console.log("💰 [Invest] Wallet signed investment transaction successfully")
       } catch (e) {
+        console.error("💰 [Invest] Wallet signing failed:", e)
         const msg = e instanceof Error ? e.message : String(e)
         if (msg.toLowerCase().includes("not currently connected")) {
+          console.log("💰 [Invest] Wallet not connected, showing auth modal...")
           const res = (await StellarWalletsKit.authModal()) as { address: string }
           const retryAddr = res?.address || from
           const retry = await StellarWalletsKit.signTransaction(xdr, {
@@ -217,6 +251,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         throw new Error("Wallet did not return a signed transaction")
       }
 
+      console.log("💰 [Invest] Submitting investment transaction...")
       const submitRes = await fetch("/api/soroban/submit", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -224,6 +259,8 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
       })
 
       const submitJson = await submitRes.json().catch(() => ({}))
+      console.log("💰 [Invest] Submit response:", { status: submitRes.status, data: submitJson })
+      
       if (!submitRes.ok) {
         throw new Error(submitJson?.error ?? "Transaction submit failed")
       }
@@ -232,6 +269,7 @@ export function StrategyInvestButton({ algoId }: { algoId: number }) {
         description: submitJson?.hash ? `Tx: ${submitJson.hash}` : `algo #${algoId}`,
       })
     } catch (e) {
+      console.error("💰 [Invest] Invest failed:", e)
       toast.error("Invest failed", {
         description: e instanceof Error ? e.message : "Unknown error",
       })
