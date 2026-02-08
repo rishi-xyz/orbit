@@ -10,6 +10,7 @@ pub struct Algo {
     pub metadata_uri: String,
     pub params_hash: String,
     pub active: bool,
+    pub creator_vault: Option<Address>, // New field for creator vault
 }
 
 #[contracttype]
@@ -18,6 +19,7 @@ enum DataKey {
     Admin,
     NextId,
     Algo(u32),
+    CreatorVault(Address), // Map creator to their vault
 }
 
 fn read_admin(env: &Env) -> Address {
@@ -66,12 +68,20 @@ impl AlgoRegistry {
         owner.require_auth();
 
         let id = read_next_id(&env);
+
+        // Get creator vault if exists
+        let creator_vault: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::CreatorVault(owner.clone()));
+
         let algo = Algo {
             owner: owner.clone(),
             name,
             metadata_uri,
             params_hash,
             active: true,
+            creator_vault,
         };
 
         env.storage().instance().set(&DataKey::Algo(id), &algo);
@@ -123,6 +133,59 @@ impl AlgoRegistry {
         let admin = read_admin(&env);
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &new_admin);
+    }
+
+    /// Set creator vault mapping
+    pub fn set_creator_vault(env: Env, creator: Address, vault: Address) {
+        creator.require_auth();
+        env.storage()
+            .instance()
+            .set(&DataKey::CreatorVault(creator.clone()), &vault);
+
+        // Update existing algorithms for this creator
+        let next_id = read_next_id(&env);
+        for id in 0..next_id {
+            if let Some(mut algo) = env
+                .storage()
+                .instance()
+                .get::<DataKey, Algo>(&DataKey::Algo(id))
+            {
+                if algo.owner == creator {
+                    algo.creator_vault = Some(vault.clone());
+                    env.storage().instance().set(&DataKey::Algo(id), &algo);
+                }
+            }
+        }
+    }
+
+    /// Get creator vault
+    pub fn get_creator_vault(env: Env, creator: Address) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::CreatorVault(creator))
+    }
+
+    /// Remove creator vault mapping
+    pub fn remove_creator_vault(env: Env, creator: Address) {
+        creator.require_auth();
+        env.storage()
+            .instance()
+            .remove(&DataKey::CreatorVault(creator.clone()));
+
+        // Update existing algorithms for this creator
+        let next_id = read_next_id(&env);
+        for id in 0..next_id {
+            if let Some(mut algo) = env
+                .storage()
+                .instance()
+                .get::<DataKey, Algo>(&DataKey::Algo(id))
+            {
+                if algo.owner == creator {
+                    algo.creator_vault = None;
+                    env.storage().instance().set(&DataKey::Algo(id), &algo);
+                }
+            }
+        }
     }
 }
 

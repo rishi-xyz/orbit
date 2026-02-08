@@ -4,6 +4,8 @@ members = [
   "algo_registry",
   "vault",
   "algo_history",
+  "creator_vault_factory",
+  "creator_vault",
 ]
 
 [workspace.dependencies]

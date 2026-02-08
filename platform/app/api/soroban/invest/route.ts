@@ -131,18 +131,31 @@ export async function POST(req: Request) {
       )
     }
 
+    // Check token access and balance first
     try {
-      const bal = await simulateContractCall<any>(
-        server,
-        source,
-        vaultTokenContract,
-        "balance",
-        [new Address(body.from).toScVal()]
-      )
-
-      const balance =
-        typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
-
+      const tokenAccessResponse = await fetch(`${req.headers.get('origin')}/api/soroban/token-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: body.from })
+      })
+      
+      const tokenAccess = await tokenAccessResponse.json()
+      
+      if (!tokenAccess.hasTrustline) {
+        return NextResponse.json(
+          {
+            error: tokenAccess.trustlineError || "Token trustline not established",
+            needsTrustlineSetup: true,
+            tokenContract: vaultTokenContract,
+            trustlineXdr: tokenAccess.trustlineXdr,
+            message: "Please establish token access first before investing."
+          },
+          { status: 400 }
+        )
+      }
+      
+      const balance = BigInt(tokenAccess.balance)
+      
       if (balance < amount) {
         return NextResponse.json(
           {
@@ -157,14 +170,42 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error"
-      return NextResponse.json(
-        {
-          error:
-            `Could not fetch token balance for investor. ` +
-            `Token contract: ${vaultTokenContract}. Details: ${msg}`,
-        },
-        { status: 400 }
-      )
+      // Fallback to direct balance check if token access API fails
+      try {
+        const bal = await simulateContractCall<any>(
+          server,
+          source,
+          vaultTokenContract,
+          "balance",
+          [new Address(body.from).toScVal()]
+        )
+
+        const balance =
+          typeof bal === "bigint" ? bal : typeof bal === "number" ? BigInt(bal) : BigInt(String(bal))
+
+        if (balance < amount) {
+          return NextResponse.json(
+            {
+              error:
+                `Insufficient token balance to invest. ` +
+                `Token contract: ${vaultTokenContract}. ` +
+                `Balance: ${balance.toString()}, required: ${amount.toString()}. ` +
+                `You need this Soroban token in your wallet before depositing into the vault.`,
+            },
+            { status: 400 }
+          )
+        }
+      } catch (balanceError) {
+        const balanceMsg = balanceError instanceof Error ? balanceError.message : "Unknown error"
+        return NextResponse.json(
+          {
+            error:
+              `Could not fetch token balance for investor. ` +
+              `Token contract: ${vaultTokenContract}. Details: ${balanceMsg}`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const contract = new Contract(CONTRACT_IDS.vault)

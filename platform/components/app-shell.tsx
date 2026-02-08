@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CoinsIcon, HammerIcon, LayoutDashboardIcon, LayersIcon, TrendingUpIcon } from "lucide-react"
+import { CoinsIcon, HammerIcon, LayoutDashboardIcon, LayersIcon, TrendingUpIcon, PlayIcon } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
 import { WalletConnect } from "@/components/wallet-connect"
@@ -32,7 +32,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ? "Strategies"
       : pathname === "/builder"
         ? "Strategy Builder"
-        : "Stellar (XLM)"
+        : pathname === "/demo-strategies"
+          ? "Demo Strategies"
+          : "Stellar (XLM)"
 
   return (
     <SidebarProvider defaultOpen>
@@ -103,6 +105,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Link href="/builder">
                       <HammerIcon />
                       <span>Builder</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/demo-strategies"}
+                    tooltip="Demo Strategies"
+                  >
+                    <Link href="/demo-strategies">
+                      <PlayIcon />
+                      <span>Demo</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

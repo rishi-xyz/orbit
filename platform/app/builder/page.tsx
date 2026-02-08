@@ -13,6 +13,8 @@ import {
   StrategyFlowBuilder,
   type StrategyFlowState,
 } from "@/components/strategy-flow-builder"
+import { CreatorVaultManager } from "@/components/creator-vault-manager"
+import { ExecutionEngineControl } from "@/components/execution-engine-control"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -181,7 +183,8 @@ export default function BuilderPage() {
 
         <Separator />
 
-        <Card>
+        <div className="grid gap-6 lg:grid-cols-3 xl:grid-cols-4">
+          <Card className="lg:col-span-2 xl:col-span-3">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Build strategy</CardTitle>
             <CardDescription>
@@ -227,6 +230,16 @@ export default function BuilderPage() {
             </form>
           </CardContent>
         </Card>
+
+        </div>
+
+        <div className="space-y-6">
+          {pubKey && (
+            <CreatorVaultManager creatorAddress={pubKey} />
+          )}
+          
+          <ExecutionEngineControl />
+        </div>
       </div>
     </AppShell>
   )
